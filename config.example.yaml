@@ -1,0 +1,118 @@
+# p-proxy 配置示例（脱敏，请按自己环境修改后再用于 config.yaml）
+#
+# 说明：
+#   - 示例中的地址全部是私有网段占位，不对应任何真实环境；
+#   - 真实配置请另存为 config.yaml，并已在 .gitignore 中排除；
+#   - 上线前务必替换所有口令与 token。
+
+version: '202603161336'
+
+proxy_server:
+  # 入口协议开关
+  http_proxy_enable: true
+  https_proxy_enable: true      # HTTPS CONNECT
+  socks5_proxy_enable: true
+
+  # 明文监听（bind_port）
+  no_tls_enable: true
+  bind_address: 127.0.0.1       # 只给本机用就写 127.0.0.1；对外提供接入才改 0.0.0.0
+  bind_port: 51080
+
+  # WS 接入端点（服务端）。其他节点/终端可用 wss://host:port/ws?token=...&proxy=目标 接入
+  ws_proxy:
+    enable: true
+    path: /ws
+    token: 'CHANGE_ME_TOKEN'    # 与 users 的账号密码是两套体系，互不影响
+    rate_limit_per_minute: 20   # 按客户端 IP；0 表示不限制，超限返回 429
+
+  # Web UI（Basic Auth，登录账号取第一个 is_admin=true 的用户）
+  web_ui:
+    enable: true
+    path: /ui
+
+  # TLS 只服务 /ui 与 /ws，不影响代理端口
+  tls_enable: false
+  tls_cert_file: null
+  tls_key_file: null
+  tls_bind_port: null           # 默认 bind_port + 1
+
+  # 未命中规则时的直连策略
+  allow_anonymous: true         # 仅在可信内网开 true
+  allow_direct_access: true     # 命中不到规则时是否允许直连目标
+  direct_access_white_list:     # 空列表 = 不限；CIDR / CIDR:port / IP:port / IP:[port,range,...]
+    - 10.20.0.0/24
+    - 192.168.50.7:8443
+    - 10.21.0.0/24:[80,443,30000-39999]
+
+  log:
+    enable: true
+    level: info
+    path: ./proxy.log
+    encoding: json
+
+  users:
+    - name: admin
+      password: 'CHANGE_ME_ADMIN_PASSWORD'
+      auth_rules: 'office, prod'
+      is_admin: true            # 放行全部规则，并可作为 UI 登录账号
+    - name: dev
+      password: 'CHANGE_ME_DEV_PASSWORD'
+      auth_rules: 'office'
+      is_admin: false
+
+  # 域名分组解析：命中 domains 的域名用对应 servers 解析，解析出的 IP 再进一次规则匹配
+  dns_domains:
+    - name: corp
+      domains: '*.corp.internal, *.corp.local'
+      servers:
+        - 10.20.0.53:53
+
+  rules:
+    # 办公区：经前置 SOCKS5
+    - name: office
+      target: SOCKS5 10.20.0.10:1080
+      domains: 10.20.0.0/24, *.corp.internal
+      headers: null
+      websocket-tunnel: null
+
+    # 生产网：同一台机器按端口分流 + 绑定的数据库隧道
+    - name: prod
+      target: HTTP 10.20.0.20:8080
+      domains: 10.21.0.0/24, 10.22.5.6:8443
+      headers: null
+      websocket-tunnel:
+        - tunnel_name: pg-tunnel
+          name: 生产库
+          target: 10.21.5.6:5432
+          type: tcp
+          bind_address: 127.0.0.1:15432   # 切勿写 0.0.0.0：那是绕过鉴权暴露内网端口
+          user: null
+        - tunnel_name: git-tunnel
+          name: 代码提交
+          target: git.corp.internal:30022
+          type: tcp
+          bind_address: 127.0.0.1:30022
+          user: null
+        - tunnel_name: ssh-box
+          name: 生产服务器（WebSSH）
+          target: 10.21.5.6:22
+          type: ssh
+          bind_address: null
+          user: ops                       # 仅用户名，密码在 Web UI 里输入
+
+    # 远端机房：经自建 wss 隧道节点接入。
+    # 本机若要自连调试，把 target 换成本机 wss://127.0.0.1:51081/ws?token=...&proxy={domain}
+    - name: remote
+      target: wss://gw.example.net/ws?token=CHANGE_ME_TOKEN&proxy={domain}
+      domains: 172.18.0.0/16, *.farm.internal
+      headers:
+        - 'Host: gw.example.net'
+        - 'Accept: */*'
+      wss-ech:
+        enable: false                 # 开启需同时配置 ech_config_file 或 ech_doh_lookup
+        inner_hostname: gw.example.net
+        connect_host: null
+        ech_config_file: null
+        ech_doh_lookup: false
+        ech_doh_cloudflare: false
+      websocket-tunnel: null

@@ -1,0 +1,26 @@
+# cross 交叉编译配置：https://github.com/cross-rs/cross
+#
+# 这里在 cross 的容器里预先装好 OpenSSL 从源码编译所需的工具链。
+# 因为 ssh2 -> libssh2-sys -> openssl-sys，而 openssl-sys 走 vendored 时
+# 需要 perl + make 才能把 OpenSSL 编译成目标架构的静态库。
+#
+# 用法：
+#   cross build --release --locked --features vendored-openssl --target <target>
+
+[target.x86_64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl:main"
+pre-build = [
+    "apt-get update && apt-get install -y --no-install-recommends perl make pkg-config cmake file",
+]
+
+[target.aarch64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl:main"
+pre-build = [
+    "apt-get update && apt-get install -y --no-install-recommends perl make pkg-config cmake file",
+]
+
+[target.armv7-unknown-linux-musleabihf]
+image = "ghcr.io/cross-rs/armv7-unknown-linux-musleabihf:main"
+pre-build = [
+    "apt-get update && apt-get install -y --no-install-recommends perl make pkg-config cmake file",
+]

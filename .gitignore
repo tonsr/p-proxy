@@ -1,0 +1,20 @@
+target/
+.cargo/
+# Cargo.lock 需要进版本库：这是二进制 crate，CI 里用 --locked 保证可复现构建
+
+*.log
+log/
+proxy.log
+
+# 真实配置不进版本库：含口令、token 与内网拓扑；仓库只保留 config.example.yaml
+config.yaml
+config.local.yaml
+
+# hosts 备份等本机文件
+hosts.backup
+hosts copy.backup
+
+.idea/
+.vscode/
+
+/target

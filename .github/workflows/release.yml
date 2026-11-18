@@ -27,10 +27,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-          - armv7-unknown-linux-gnueabihf
+        include:
+          - target: x86_64-unknown-linux-gnu
+            openssl: system
+          - target: aarch64-unknown-linux-gnu
+            openssl: custom
+          - target: armv7-unknown-linux-gnueabihf
+            openssl: custom
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +42,15 @@ jobs:
           tool: cross
 
       - name: Build
-        run: cross build --release --locked --target ${{ matrix.target }}
+        run: |
+          set -eux
+          if [ "${{ matrix.openssl }}" = "custom" ]; then
+            # pre-build 已在容器内编好 OpenSSL 到 /usr/local/openssl
+            OPENSSL_DIR=/usr/local/openssl OPENSSL_STATIC=1 \
+              cross build --release --locked --target ${{ matrix.target }}
+          else
+            cross build --release --locked --target ${{ matrix.target }}
+          fi
 
       - name: Package
         run: |
@@ -91,6 +102,9 @@ jobs:
           $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
           $env:OPENSSL_DIR = "C:\msys64\mingw64"
           $env:OPENSSL_STATIC = "1"
+          # libssh2 1.9 的 wincng 后端在 MinGW 下会把 _libssh2_wincng 定义进多个目标文件，
+          # 触发 multiple definition；该符号内容一致，允许重复定义即可。
+          $env:RUSTFLAGS = "-C link-arg=-Wl,--allow-multiple-definition"
           cmake --version
           cargo build --release --locked --target x86_64-pc-windows-gnu
 

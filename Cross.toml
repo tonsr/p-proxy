@@ -1,14 +1,16 @@
 # cross 交叉编译配置：https://github.com/cross-rs/cross
 #
-# 说明：p-proxy 通过 ssh2 -> libssh2-sys 0.2.7 间接依赖 OpenSSL。该库用 CMake 构建，
-# 在 musl 目标下交叉工具链会把库搜索限制在 sysroot 内，找不到 vendored 编译出来的
-# OpenSSL 库；因此 Linux 侧统一使用 gnu 目标，走 cross 镜像里的系统 OpenSSL。
-#
-# pre-build 里的 `|| true` 是容错：cross 官方镜像通常已预装 libssl-dev 与 pkg-config，
-# 若容器内 apt 源不可达也不会因此中断构建。
+# p-proxy 通过 ssh2 -> libssh2-sys 0.2.7 间接依赖 OpenSSL：
+#  - x86_64 gnu：直接使用 cross 镜像内预装的 libssl-dev
+#  - aarch64 / armv7：cross 镜像装不上目标架构的 libssl-dev，因此在 pre-build 里
+#    用镜像自带的交叉工具链为 arm 架构现场编译一份 OpenSSL，安装到 /usr/local/openssl，
+#    构建时通过 OPENSSL_DIR 指过去（见 workflow 的 matrix.openssl）。
 #
 # 用法：
 #   cross build --release --locked --target <target>
+
+[build.env]
+passthrough = ["OPENSSL_DIR", "OPENSSL_STATIC", "OPENSSL_LIB_DIR", "OPENSSL_INCLUDE_DIR"]
 
 [target.x86_64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
@@ -19,11 +21,11 @@ pre-build = [
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
 pre-build = [
-    "apt-get update -y || true && apt-get install -y --no-install-recommends pkg-config libssl-dev:arm64 || true",
+    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu- no-shared no-tests no-asm --prefix=/usr/local/openssl --libdir=lib; make -j4; make install_sw",
 ]
 
 [target.armv7-unknown-linux-gnueabihf]
 image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main"
 pre-build = [
-    "apt-get update -y || true && apt-get install -y --no-install-recommends pkg-config libssl-dev:armhf || true",
+    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-armv4 --cross-compile-prefix=arm-linux-gnueabihf- no-shared no-tests no-asm --prefix=/usr/local/openssl --libdir=lib; make -j4; make install_sw",
 ]

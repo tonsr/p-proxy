@@ -1,10 +1,12 @@
 # cross 交叉编译配置：https://github.com/cross-rs/cross
 #
 # p-proxy 通过 ssh2 -> libssh2-sys 0.2.7 间接依赖 OpenSSL：
-#  - x86_64 gnu：直接使用 cross 镜像内预装的 libssl-dev
-#  - aarch64 / armv7：cross 镜像装不上目标架构的 libssl-dev，因此在 pre-build 里
-#    用镜像自带的交叉工具链为 arm 架构现场编译一份 OpenSSL，安装到 /usr/local/openssl，
-#    构建时通过 OPENSSL_DIR 指过去（见 workflow 的 matrix.openssl）。
+#  - x86_64 gnu：使用 cross 镜像内预装的 libssl-dev（host 架构，CMake 能直接在 sysroot 找到）
+#  - aarch64 / armv7：cross 镜像装不上目标架构的 libssl-dev，因此在 pre-build 里用镜像自带的
+#    交叉工具链现场编译 OpenSSL，并**直接安装进目标架构的 sysroot**。
+#    这一步很关键：libssh2-sys 用 CMake 构建，而 cross 的 toolchain 把 CMake 的库搜索
+#    限制在 sysroot 内（CMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY），装在 sysroot 外
+#    （如 /usr/local/openssl）CMake 会报 "missing: OPENSSL_CRYPTO_LIBRARY"。
 #
 # 用法：
 #   cross build --release --locked --target <target>
@@ -21,11 +23,11 @@ pre-build = [
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
 pre-build = [
-    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu- no-shared no-tests no-asm --prefix=/usr/local/openssl --libdir=lib; make -j4; make install_sw",
+    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu- no-shared no-tests no-asm --prefix=/usr/aarch64-linux-gnu --libdir=lib; make -j4; make install_sw; ls /usr/aarch64-linux-gnu/lib/libcrypto.a",
 ]
 
 [target.armv7-unknown-linux-gnueabihf]
 image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main"
 pre-build = [
-    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-armv4 --cross-compile-prefix=arm-linux-gnueabihf- no-shared no-tests no-asm --prefix=/usr/local/openssl --libdir=lib; make -j4; make install_sw",
+    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-armv4 --cross-compile-prefix=arm-linux-gnueabihf- no-shared no-tests no-asm --prefix=/usr/arm-linux-gnueabihf --libdir=lib; make -j4; make install_sw; ls /usr/arm-linux-gnueabihf/lib/libcrypto.a",
 ]

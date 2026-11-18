@@ -29,11 +29,11 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            openssl: system
+            openssl_dir: ""
           - target: aarch64-unknown-linux-gnu
-            openssl: custom
+            openssl_dir: /usr/aarch64-linux-gnu
           - target: armv7-unknown-linux-gnueabihf
-            openssl: custom
+            openssl_dir: /usr/arm-linux-gnueabihf
     steps:
       - uses: actions/checkout@v4
 
@@ -44,9 +44,9 @@ jobs:
       - name: Build
         run: |
           set -eux
-          if [ "${{ matrix.openssl }}" = "custom" ]; then
-            # pre-build 已在容器内编好 OpenSSL 到 /usr/local/openssl
-            OPENSSL_DIR=/usr/local/openssl OPENSSL_STATIC=1 \
+          if [ -n "${{ matrix.openssl_dir }}" ]; then
+            # pre-build 已把 OpenSSL 编译并安装进目标架构 sysroot
+            OPENSSL_DIR="${{ matrix.openssl_dir }}" OPENSSL_STATIC=1 \
               cross build --release --locked --target ${{ matrix.target }}
           else
             cross build --release --locked --target ${{ matrix.target }}

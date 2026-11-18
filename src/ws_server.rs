@@ -18,6 +18,7 @@ pub fn is_ws_upgrade(req: &Request<hyper::body::Incoming>) -> bool {
     hyper_tungstenite::is_upgrade_request(req)
 }
 
+#[cfg_attr(not(feature = "webssh"), allow(dead_code))]
 pub fn websocket_upgrade(
     req: Request<hyper::body::Incoming>,
 ) -> anyhow::Result<(Response<http_body_util::Full<bytes::Bytes>>, HyperWebsocket)> {
@@ -55,6 +56,7 @@ pub fn websocket_upgrade_manual(
 }
 
 /// WebSSH: upgrade first, then connect via rule; on failure send error to client. Then wait password, SSH shell, bridge.
+#[cfg(feature = "webssh")]
 pub async fn serve_webssh_with_connect(
     ws: HyperWebsocket,
     compiled_rule: crate::model::Rule,

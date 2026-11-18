@@ -187,11 +187,55 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
+  # Android: Termux 可直接运行的可执行文件（不含 WebSSH，见 Cargo.toml 的 webssh feature）
+  # ---------------------------------------------------------------------------
+  android:
+    name: android-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-linux-android
+            arch: arm64
+          - target: armv7-linux-androideabi
+            arch: arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build
+        run: |
+          set -eux
+          # 不带 webssh：ssh2 -> libssh2 -> OpenSSL 在 NDK 下交叉编译代价过高，
+          # 手机/盒子上真正需要的是代理与隧道能力，这两者不依赖 ssh2。
+          cross build --release --locked --no-default-features --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          set -eux
+          NAME="p-proxy-android-${{ matrix.arch }}"
+          mkdir -p "dist/${NAME}"
+          cp "target/${{ matrix.target }}/release/p-proxy" "dist/${NAME}/"
+          cp config.example.yaml README.md LICENSE "dist/${NAME}/"
+          tar -C dist -czf "dist/${NAME}.tar.gz" "${NAME}"
+          ls -lh "dist/${NAME}.tar.gz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
   # 汇总所有产物，挂到 GitHub Release
   # ---------------------------------------------------------------------------
   release:
     name: publish release
-    needs: [linux, windows, macos]
+    needs: [linux, windows, macos, android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:

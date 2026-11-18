@@ -14,6 +14,9 @@
 #
 # 用法：
 #   cross build --release --locked --target <target>
+#
+# Android 目标构建时不带 webssh（--no-default-features），因此不需要 OpenSSL / zlib，
+# 直接用 cross 的 android 镜像；产物可在 Termux 中直接运行。
 
 [build.env]
 passthrough = ["OPENSSL_DIR", "OPENSSL_STATIC", "OPENSSL_LIB_DIR", "OPENSSL_INCLUDE_DIR"]
@@ -35,3 +38,10 @@ image = 'ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main'
 pre-build = [
     'set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o z.tgz https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz; tar xzf z.tgz; cd zlib-1.3.1; CC=arm-linux-gnueabihf-gcc AR=arm-linux-gnueabihf-ar RANLIB=arm-linux-gnueabihf-ranlib CHOST=arm-linux-gnueabihf ./configure --static --prefix=/usr/arm-linux-gnueabihf; make -j4; make install; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-armv4 --cross-compile-prefix=arm-linux-gnueabihf- no-shared no-tests no-asm --prefix=/usr/arm-linux-gnueabihf --libdir=lib; make -j4; make install_sw; ls -l /usr/arm-linux-gnueabihf/lib/libcrypto.a /usr/arm-linux-gnueabihf/lib/libz.a',
 ]
+
+# Android：无 ssh2/OpenSSL 依赖，只需要 NDK 工具链（镜像自带）
+[target.aarch64-linux-android]
+image = 'ghcr.io/cross-rs/aarch64-linux-android:main'
+
+[target.armv7-linux-androideabi]
+image = 'ghcr.io/cross-rs/armv7-linux-androideabi:main'

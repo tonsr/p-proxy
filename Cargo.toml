@@ -18,12 +18,12 @@ path = "src/main.rs"
 # name = "p-test"
 # path = "test.rs"
 
-# CI 交叉编译到 musl / arm / android 时启用：
-#   cargo build --release --features vendored-openssl
-# 让 OpenSSL 从源码编译到目标架构，不依赖目标平台的 libssl。
-# 本地常规构建不要开，行为与之前一致。
+# webssh 默认开启：内置浏览器 SSH 终端（依赖 ssh2 -> libssh2 -> OpenSSL）。
+# 交叉编译到无法提供 OpenSSL 的目标（如 Android/NDK）时用 --no-default-features 去掉它，
+# 此时代理、分流、TCP 隧道、Web UI 等能力完全不受影响。
 [features]
-default = []
+default = ["webssh"]
+webssh = ["dep:ssh2"]
 vendored-openssl = ["openssl-sys/vendored"]
 
 [dependencies]
@@ -50,7 +50,7 @@ hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "aws_lc_rs", "logging"] }
 rustls-pemfile = "2"
 tokio-rustls = "0.26"
-ssh2 = "0.3"
+ssh2 = { version = "0.3", optional = true }
 # 仅用于让 libssh2-sys 链接到的 openssl-sys 能走 vendored（feature unification）；
 # 默认不启用以避免引入额外的编译时间。
 openssl-sys = { version = "0.9", optional = true }

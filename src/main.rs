@@ -11,6 +11,7 @@ mod ws_upstream_raw;
 mod wss_ech;
 mod ui;
 mod ws_server;
+#[cfg(feature = "webssh")]
 mod webssh_ssh;
 mod stats;
 
@@ -21,6 +22,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use http_body_util::combinators::BoxBody;
+#[cfg(feature = "webssh")]
 use hyper::header::AUTHORIZATION;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
@@ -600,6 +602,15 @@ async fn route_http(
             let rest = path.strip_prefix(&ui_cfg.path).unwrap_or("").trim_start_matches('/');
             let parts: Vec<&str> = rest.split('/').collect();
             if parts.len() >= 3 && parts[0] == "webssh" && is_ws_upgrade_request(&req) {
+                #[cfg(not(feature = "webssh"))]
+                {
+                    return Ok(ws_server::plain_response(
+                        hyper::StatusCode::NOT_IMPLEMENTED,
+                        "webssh is not included in this build (built with --no-default-features)",
+                    ));
+                }
+                #[cfg(feature = "webssh")]
+                {
                 let rule_name = parts[1];
                 let tunnel_name = parts[2];
                 let auth_header = req.headers().get(AUTHORIZATION).and_then(|v| v.to_str().ok());
@@ -664,6 +675,7 @@ async fn route_http(
                             "ws upgrade failed",
                         ));
                     }
+                }
                 }
             }
 

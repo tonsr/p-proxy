@@ -31,6 +31,33 @@ release 构建下常驻内存十几 MB 量级；启动期内存峰值属于一�
 
 ---
 
+## 预编译包
+
+[Releases](https://github.com/tonsr/p-proxy/releases) 页面按平台提供打包好的二进制，解压即用。每个包里含二进制、`README.md`、`LICENSE`、`config.example.yaml`。
+
+| 平台 | 目标三元组 | 说明 |
+| --- | --- | --- |
+| Linux x86_64 | `x86_64-unknown-linux-gnu` | glibc，主流发行版 / 容器 |
+| Linux aarch64 | `aarch64-unknown-linux-gnu` | 树莓派 4/5、ARM 服务器、香橙派 |
+| Linux armv7 | `armv7-unknown-linux-gnueabihf` | 树莓派 2/3、老式 ARM 盒子和路由器 |
+| macOS Apple Silicon | `aarch64-apple-darwin` | M 系列 |
+| macOS Intel | `x86_64-apple-darwin` | Intel Mac |
+| Windows x86_64 | `x86_64-pc-windows-gnu` | 免安装 exe（已静态链接 OpenSSL） |
+
+Linux 的 ARM 包是在 CI 里为目标架构现编 OpenSSL / zlib 的静态版本，不依赖目标机装 `libssl-dev`。
+
+```bash
+# 以 aarch64 为例
+tar -xzf p-proxy-aarch64-unknown-linux-gnu.tar.gz
+cd p-proxy-aarch64-unknown-linux-gnu
+cp config.example.yaml config.yaml
+./p-proxy
+```
+
+> 二进制只有一份，做服务端还是客户端由 `rules` 里每条规则的 `target` 决定，不需要区分版本。
+
+---
+
 ## 快速开始
 
 ```powershell

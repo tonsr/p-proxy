@@ -43,8 +43,26 @@ release 构建下常驻内存十几 MB 量级；启动期内存峰值属于一�
 | macOS Apple Silicon | `aarch64-apple-darwin` | M 系列 |
 | macOS Intel | `x86_64-apple-darwin` | Intel Mac |
 | Windows x86_64 | `x86_64-pc-windows-gnu` | 免安装 exe（已静态链接 OpenSSL） |
+| Android arm64 | `aarch64-linux-android` | Termux 里直接跑，见下方说明 |
+| Android arm | `armv7-linux-androideabi` | 32 位 Android / 老盒子 |
 
 Linux 的 ARM 包是在 CI 里为目标架构现编 OpenSSL / zlib 的静态版本，不依赖目标机装 `libssl-dev`。
+
+**Android 包不含 WebSSH**：`ssh2 → libssh2 → OpenSSL` 在 NDK 下交叉编译代价太大，因此 Android 版用 `--no-default-features` 构建。代理、规则分流、TCP 隧道、Web UI、WSS 出口全部保留，只有 WebSSH 终端页不可用（访问会返回 501）。手机上通常也有更顺手的 SSH 客户端。
+
+```bash
+# 以 Termux（arm64）为例
+tar -xzf p-proxy-android-arm64.tar.gz
+cd p-proxy-android-arm64
+cp config.example.yaml config.yaml
+./p-proxy
+```
+
+Android 版要在 Termux 里跑，先 `pkg install tsu` 或直接用 `termux-wake-lock` 防止休眠杀进程；监听 1024 以下端口需要 root。
+
+```bash
+# Lime / OpenWrt 类设备请用对应的 Linux 包，不要用 Android 包
+```
 
 ```bash
 # 以 aarch64 为例
@@ -470,6 +488,16 @@ cross build --release --target aarch64-unknown-linux-gnu
 ```
 
 或在 WSL / Linux 上 `sudo apt install gcc-aarch64-linux-gnu` 后直接 `cargo build --release --target aarch64-unknown-linux-gnu`。
+
+Linux 的 ARM 目标需要注意：`ssh2` 会通过 CMake 构建 libssh2，而 cross 的交叉工具链把 CMake 的库搜索限制在 sysroot 内。仓库里的 `Cross.toml` 已处理这点——在 pre-build 里为目标架构现编 OpenSSL / zlib 并装进 sysroot。一半时间都花在这两个 C 库上。
+
+目标平台没有可用 OpenSSL 时（例如 Android/NDK），直接去掉 WebSSH：
+
+```powershell
+cross build --release --target aarch64-linux-android --no-default-features
+```
+
+CI 的完整矩阵（`.github/workflows/release.yml`）：Linux x86_64 / aarch64 / armv7、macOS Intel / Apple Silicon、Windows x86_64、Android arm64 / arm，打 `v*` tag 时自动汇总挂到 Release。
 
 Docker（镜像内二进制名为 `p-proxy`）：
 

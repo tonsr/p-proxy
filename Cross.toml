@@ -1,26 +1,29 @@
 # cross 交叉编译配置：https://github.com/cross-rs/cross
 #
-# 这里在 cross 的容器里预先装好 OpenSSL 从源码编译所需的工具链。
-# 因为 ssh2 -> libssh2-sys -> openssl-sys，而 openssl-sys 走 vendored 时
-# 需要 perl + make 才能把 OpenSSL 编译成目标架构的静态库。
+# 说明：p-proxy 通过 ssh2 -> libssh2-sys 0.2.7 间接依赖 OpenSSL。该库用 CMake 构建，
+# 在 musl 目标下交叉工具链会把库搜索限制在 sysroot 内，找不到 vendored 编译出来的
+# OpenSSL 库；因此 Linux 侧统一使用 gnu 目标，走 cross 镜像里的系统 OpenSSL。
+#
+# pre-build 里的 `|| true` 是容错：cross 官方镜像通常已预装 libssl-dev 与 pkg-config，
+# 若容器内 apt 源不可达也不会因此中断构建。
 #
 # 用法：
-#   cross build --release --locked --features vendored-openssl --target <target>
+#   cross build --release --locked --target <target>
 
-[target.x86_64-unknown-linux-musl]
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl:main"
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 pre-build = [
-    "apt-get update && apt-get install -y --no-install-recommends perl make pkg-config cmake file",
+    "apt-get update -y || true && apt-get install -y --no-install-recommends pkg-config libssl-dev || true",
 ]
 
-[target.aarch64-unknown-linux-musl]
-image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl:main"
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
 pre-build = [
-    "apt-get update && apt-get install -y --no-install-recommends perl make pkg-config cmake file",
+    "apt-get update -y || true && apt-get install -y --no-install-recommends pkg-config libssl-dev:arm64 || true",
 ]
 
-[target.armv7-unknown-linux-musleabihf]
-image = "ghcr.io/cross-rs/armv7-unknown-linux-musleabihf:main"
+[target.armv7-unknown-linux-gnueabihf]
+image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main"
 pre-build = [
-    "apt-get update && apt-get install -y --no-install-recommends perl make pkg-config cmake file",
+    "apt-get update -y || true && apt-get install -y --no-install-recommends pkg-config libssl-dev:armhf || true",
 ]

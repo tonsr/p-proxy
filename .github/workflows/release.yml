@@ -12,11 +12,14 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # libssh2-sys 0.2.7 的 CMakeLists 用了 CMake 2.x 时代的 cmake_minimum_required，
+  # CMake 4.x 会直接报错退出，因此 Windows / macOS 统一用 3.31.x。
+  CMAKE_VER: "3.31.6"
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Linux: 静态 musl，x86_64 / aarch64 / armv7
-  # OpenSSL 通过 vendored feature 从源码编译，产物不依赖目标机 libssl。
+  # Linux: gnu 目标，OpenSSL 来自 cross 镜像内的系统包
+  # （musl 静态方案被 libssh2-sys 的 CMake 限制在 sysroot 内搜索，走不通）
   # ---------------------------------------------------------------------------
   linux:
     name: linux-${{ matrix.target }}
@@ -25,9 +28,9 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
-          - armv7-unknown-linux-musleabihf
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +39,7 @@ jobs:
           tool: cross
 
       - name: Build
-        run: cross build --release --locked --features vendored-openssl --target ${{ matrix.target }}
+        run: cross build --release --locked --target ${{ matrix.target }}
 
       - name: Package
         run: |
@@ -73,12 +76,22 @@ jobs:
         with:
           targets: x86_64-pc-windows-gnu
 
+      - name: Install CMake 3.x
+        shell: pwsh
+        run: |
+          $url = "https://github.com/Kitware/CMake/releases/download/v$env:CMAKE_VER/cmake-$env:CMAKE_VER-windows-x86_64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\cmake.zip"
+          Expand-Archive "$env:RUNNER_TEMP\cmake.zip" -DestinationPath "$env:RUNNER_TEMP\cmake"
+          $bin = Get-ChildItem "$env:RUNNER_TEMP\cmake" -Recurse -Filter cmake.exe | Select-Object -First 1
+          Split-Path $bin.FullName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
       - name: Build
         shell: pwsh
         run: |
           $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
           $env:OPENSSL_DIR = "C:\msys64\mingw64"
           $env:OPENSSL_STATIC = "1"
+          cmake --version
           cargo build --release --locked --target x86_64-pc-windows-gnu
 
       - name: Package
@@ -99,7 +112,7 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # macOS: Intel 与 Apple Silicon 各出一份
+  # macOS: Intel 与 Apple Silicon 各一份
   # ---------------------------------------------------------------------------
   macos:
     name: macos-${{ matrix.arch }}
@@ -108,10 +121,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-13
+          - runner: macos-15-intel
             arch: x86_64
             target: x86_64-apple-darwin
-          - runner: macos-14
+          - runner: macos-15
             arch: arm64
             target: aarch64-apple-darwin
     steps:
@@ -128,8 +141,20 @@ jobs:
           echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
           echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
 
+      - name: Install CMake 3.x
+        run: |
+          set -eux
+          TARBALL="cmake-${CMAKE_VER}-macos-universal.tar.gz"
+          curl -fsSL -o "/tmp/${TARBALL}" \
+            "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/${TARBALL}"
+          mkdir -p /tmp/cmake3
+          tar -xzf "/tmp/${TARBALL}" -C /tmp/cmake3 --strip-components=1
+          echo "/tmp/cmake3/CMake.app/Contents/bin" >> "$GITHUB_PATH"
+
       - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: |
+          cmake --version
+          cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package
         run: |

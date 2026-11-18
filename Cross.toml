@@ -1,12 +1,16 @@
 # cross 交叉编译配置：https://github.com/cross-rs/cross
 #
-# p-proxy 通过 ssh2 -> libssh2-sys 0.2.7 间接依赖 OpenSSL：
-#  - x86_64 gnu：使用 cross 镜像内预装的 libssl-dev（host 架构，CMake 能直接在 sysroot 找到）
-#  - aarch64 / armv7：cross 镜像装不上目标架构的 libssl-dev，因此在 pre-build 里用镜像自带的
-#    交叉工具链现场编译 OpenSSL，并**直接安装进目标架构的 sysroot**。
-#    这一步很关键：libssh2-sys 用 CMake 构建，而 cross 的 toolchain 把 CMake 的库搜索
-#    限制在 sysroot 内（CMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY），装在 sysroot 外
-#    （如 /usr/local/openssl）CMake 会报 "missing: OPENSSL_CRYPTO_LIBRARY"。
+# p-proxy 的依赖链里有两条原生 C 库需要交叉编译：
+#   ssh2 -> libssh2-sys 0.2.7 (CMake 构建) -> OpenSSL + zlib
+#
+# cross 的镜像装不上目标架构的 libssl-dev / zlib1g-dev（dpkg 在老镜像里解包失败），
+# 而 libssh2-sys 用 CMake 构建，cross 的 toolchain 把 CMake 的库搜索限制在 sysroot 内
+# （CMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY），装在 sysroot 之外（如 /usr/local）会报
+#   Could NOT find OpenSSL (missing: OPENSSL_CRYPTO_LIBRARY)
+#   Could NOT find ZLIB (missing: ZLIB_LIBRARY)
+#
+# 因此 ARM 目标在 pre-build 里现场编译 OpenSSL 与 zlib，并直接装进目标架构 sysroot，
+# 这样 CMake 和 openssl-sys 都能找到。x86_64 直接用镜像自带的 libssl-dev / zlib1g-dev。
 #
 # 用法：
 #   cross build --release --locked --target <target>
@@ -15,19 +19,19 @@
 passthrough = ["OPENSSL_DIR", "OPENSSL_STATIC", "OPENSSL_LIB_DIR", "OPENSSL_INCLUDE_DIR"]
 
 [target.x86_64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+image = 'ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main'
 pre-build = [
-    "apt-get update -y || true && apt-get install -y --no-install-recommends pkg-config libssl-dev || true",
+    'apt-get update -y || true && apt-get install -y --no-install-recommends pkg-config libssl-dev zlib1g-dev || true',
 ]
 
 [target.aarch64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
+image = 'ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main'
 pre-build = [
-    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu- no-shared no-tests no-asm --prefix=/usr/aarch64-linux-gnu --libdir=lib; make -j4; make install_sw; ls /usr/aarch64-linux-gnu/lib/libcrypto.a",
+    'set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o z.tgz https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz; tar xzf z.tgz; cd zlib-1.3.1; CC=aarch64-linux-gnu-gcc AR=aarch64-linux-gnu-ar RANLIB=aarch64-linux-gnu-ranlib CHOST=aarch64-linux-gnu ./configure --static --prefix=/usr/aarch64-linux-gnu; make -j4; make install; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu- no-shared no-tests no-asm --prefix=/usr/aarch64-linux-gnu --libdir=lib; make -j4; make install_sw; ls -l /usr/aarch64-linux-gnu/lib/libcrypto.a /usr/aarch64-linux-gnu/lib/libz.a',
 ]
 
 [target.armv7-unknown-linux-gnueabihf]
-image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main"
+image = 'ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main'
 pre-build = [
-    "set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-armv4 --cross-compile-prefix=arm-linux-gnueabihf- no-shared no-tests no-asm --prefix=/usr/arm-linux-gnueabihf --libdir=lib; make -j4; make install_sw; ls /usr/arm-linux-gnueabihf/lib/libcrypto.a",
+    'set -eux; apt-get update -y; apt-get install -y --no-install-recommends perl make curl ca-certificates; cd /tmp; curl -fsSL -o z.tgz https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz; tar xzf z.tgz; cd zlib-1.3.1; CC=arm-linux-gnueabihf-gcc AR=arm-linux-gnueabihf-ar RANLIB=arm-linux-gnueabihf-ranlib CHOST=arm-linux-gnueabihf ./configure --static --prefix=/usr/arm-linux-gnueabihf; make -j4; make install; cd /tmp; curl -fsSL -o o.tgz https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz; tar xzf o.tgz; cd openssl-3.0.16; ./Configure linux-armv4 --cross-compile-prefix=arm-linux-gnueabihf- no-shared no-tests no-asm --prefix=/usr/arm-linux-gnueabihf --libdir=lib; make -j4; make install_sw; ls -l /usr/arm-linux-gnueabihf/lib/libcrypto.a /usr/arm-linux-gnueabihf/lib/libz.a',
 ]

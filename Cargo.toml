@@ -1,7 +1,12 @@
 [package]
 name = "p-proxy"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2024"
+authors = ["tonsr <https://github.com/tonsr>"]
+description = "IntraHub: single-entry intranet aggregation proxy. One config, many isolated networks, WebSocket cross-network tunnels."
+license = "MIT"
+repository = "https://github.com/tonsr/p-proxy"
+readme = "README.md"
 
 # 开发构建：适度优化以降低启动期内存峰值（debug 默认 opt-level=0 易导致 500MB+ 峰值）
 [profile.dev]

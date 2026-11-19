@@ -2,7 +2,7 @@
 name = "p-proxy"
 version = "0.2.1"
 edition = "2024"
-authors = ["tonsr <https://github.com/tonsr>"]
+authors = ["tonsr <ak48159@qq.com>"]
 description = "IntraHub: single-entry intranet aggregation proxy. One config, many isolated networks, WebSocket cross-network tunnels."
 license = "MIT"
 repository = "https://github.com/tonsr/p-proxy"

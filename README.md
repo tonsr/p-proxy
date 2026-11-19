@@ -523,4 +523,4 @@ docker run -d --name p-proxy -p 51080:51080 -v ${PWD}/config.yaml:/app/config.ya
 [MIT](LICENSE)。可自由使用、修改、分发、商用，可闭源衍生，**无回贡义务**；允许借助 AI / 大模型 / 代码助手参与二次开发，产出的代码权利归你。
 唯一要求：保留版权声明与许可声明。
 
-Copyright (c) 2026 [tonsr](https://github.com/tonsr)
+Copyright (c) 2026 tonsr · [github.com/tonsr](https://github.com/tonsr) · ak48159@qq.com
